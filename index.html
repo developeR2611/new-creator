@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en" class="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Remix CRATOR - Premium Cinematic Streaming</title>
+    <meta name="description" content="Stream movies, exclusive series, anime, and 4K HDR originals with an ultra-modern cinematic viewing experience." />
+    <meta property="og:title" content="Remix CRATOR - Premium Cinematic Streaming" />
+    <meta property="og:description" content="Stream movies, exclusive series, anime, and 4K HDR originals with an ultra-modern cinematic viewing experience." />
+    <meta property="og:type" content="website" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Mono:ital,wght@0,400;0,500;1,400&family=Manrope:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;600;700;800&display=swap" rel="stylesheet">
+    <script>
+      // Anti-Ad & Anti-Redirect Protection Guard
+      (function() {
+        // Intercept and prevent unwanted popup windows
+        try {
+          window.open = function(url, target, features) {
+            console.warn('[CRATOR Protection] Blocked popup/redirect:', url);
+            return null;
+          };
+        } catch (e) {}
+      })();
+    </script>
+  </head>
+  <body class="bg-black text-[#f3f0ea] antialiased selection:bg-[#f3f0ea] selection:text-black overflow-x-hidden font-sans">
+    <div id="root"></div>
+    <script type="module" crossorigin src="/src/main.tsx"></script>
+  </body>
+</html>
+
