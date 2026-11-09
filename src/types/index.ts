@@ -73,6 +73,7 @@ export interface MediaItem {
   streamStatus?: 'available' | 'unavailable' | 'unverified';
   videos?: TmdbVideo[];
   trailerKey?: string;
+  logoUrl?: string;
 }
 
 export interface TmdbVideo {

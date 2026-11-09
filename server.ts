@@ -188,20 +188,22 @@ app.get('/api/tmdb/search', async (req: Request, res: Response) => {
   res.json(result.data);
 });
 
-// 4. Movie Details
+// 4. Movie Details (with credits, videos, recommendations, and title logos)
 app.get('/api/tmdb/movie/:id', async (req: Request, res: Response) => {
   const result = await callTmdbApi(`/movie/${req.params.id}`, {
-    append_to_response: 'credits,videos,recommendations',
+    append_to_response: 'credits,videos,recommendations,images',
+    include_image_language: 'en,null',
     language: 'en-US',
   });
   if (!result.ok) return res.status(result.status || 500).json(result);
   res.json(result.data);
 });
 
-// 5. TV Show Details
+// 5. TV Show Details (with credits, videos, recommendations, and title logos)
 app.get('/api/tmdb/tv/:id', async (req: Request, res: Response) => {
   const result = await callTmdbApi(`/tv/${req.params.id}`, {
-    append_to_response: 'credits,videos,recommendations',
+    append_to_response: 'credits,videos,recommendations,images',
+    include_image_language: 'en,null',
     language: 'en-US',
   });
   if (!result.ok) return res.status(result.status || 500).json(result);
@@ -249,6 +251,15 @@ app.get('/api/tmdb/:type/:id/videos', async (req: Request, res: Response) => {
   const mediaType = req.params.type === 'tv' || req.params.type === 'series' ? 'tv' : 'movie';
   const cleanId = String(req.params.id).replace(/^tmdb-(movie|tv|series)-/, '');
   const result = await callTmdbApi(`/${mediaType}/${cleanId}/videos`, { language: 'en-US' });
+  if (!result.ok) return res.status(result.status || 500).json(result);
+  res.json(result.data);
+});
+
+// 11. Official Title Logos & Images
+app.get('/api/tmdb/:type/:id/images', async (req: Request, res: Response) => {
+  const mediaType = req.params.type === 'tv' || req.params.type === 'series' ? 'tv' : 'movie';
+  const cleanId = String(req.params.id).replace(/^tmdb-(movie|tv|series)-/, '');
+  const result = await callTmdbApi(`/${mediaType}/${cleanId}/images`, { include_image_language: 'en,null' });
   if (!result.ok) return res.status(result.status || 500).json(result);
   res.json(result.data);
 });

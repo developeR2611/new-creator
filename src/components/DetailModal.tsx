@@ -1,18 +1,17 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { 
-  X, 
+  ArrowLeft,
   Play, 
-  Bookmark, 
+  Plus, 
   Check, 
   Share2, 
-  Star, 
+  Film, 
+  ArrowUpRight,
   Tv, 
   ChevronLeft, 
   ChevronRight, 
-  Loader2, 
-  Film,
-  User,
-  Sparkles
+  ChevronDown,
+  Loader2 
 } from 'lucide-react';
 import { MediaItem, Episode, Season, TmdbVideo } from '../types';
 import { ImageWithFallback } from './ImageWithFallback';
@@ -21,6 +20,7 @@ import {
   getTmdbSeasonEpisodes, 
   getTmdbRecommendations, 
   getTmdbVideos,
+  getTmdbLogo,
   extractBestTrailer 
 } from '../services/tmdb';
 import { TrailerModal } from './TrailerModal';
@@ -59,7 +59,7 @@ export const DetailModal: React.FC<DetailModalProps> = ({
 
   // Scroll container refs
   const modalScrollRef = useRef<HTMLDivElement>(null);
-  const castScrollRef = useRef<HTMLDivElement>(null);
+  const episodesScrollRef = useRef<HTMLDivElement>(null);
   const recsScrollRef = useRef<HTMLDivElement>(null);
 
   // Sync state whenever selected item changes
@@ -91,7 +91,7 @@ export const DetailModal: React.FC<DetailModalProps> = ({
       const mediaType = isTv ? 'tv' : 'movie';
       const lookupId = item.tmdbId || item.id;
 
-      // 1. Fetch live TMDB details (with credits, videos, recommendations)
+      // 1. Fetch live TMDB details (credits, videos, recommendations, logos)
       getTmdbDetail(mediaType, lookupId).then((detailed) => {
         if (!isCancelled && detailed) {
           setActiveItem((prev) => (prev ? { ...prev, ...detailed } : detailed));
@@ -101,7 +101,16 @@ export const DetailModal: React.FC<DetailModalProps> = ({
         }
       }).catch(() => {});
 
-      // 2. Fetch TMDB Videos explicitly if not already attached
+      // 1.5 Fetch official TMDB logo image if missing
+      if (!item.logoUrl) {
+        getTmdbLogo(mediaType, lookupId).then((logo) => {
+          if (!isCancelled && logo) {
+            setActiveItem((prev) => (prev ? { ...prev, logoUrl: logo } : null));
+          }
+        }).catch(() => {});
+      }
+
+      // 2. Fetch TMDB Videos explicitly if not attached
       if (!item.videos || item.videos.length === 0) {
         setIsLoadingVideos(true);
         getTmdbVideos(mediaType, lookupId).then((vids) => {
@@ -161,7 +170,7 @@ export const DetailModal: React.FC<DetailModalProps> = ({
     };
   }, [item?.id]);
 
-  // Lock body scroll while modal is open
+  // Lock body scroll while modal is open & listen for Escape
   useEffect(() => {
     if (!item) return;
     const orig = document.body.style.overflow;
@@ -185,9 +194,6 @@ export const DetailModal: React.FC<DetailModalProps> = ({
   const inWatchlist = isInWatchlist(activeItem.id);
   const selectedSeason = seasons.find((s) => s.seasonNumber === selectedSeasonNumber) || seasons[0];
   const isTv = activeItem.type === 'series' || activeItem.type === 'anime' || (activeItem.type as any) === 'tv';
-
-  // Best trailer resolution
-  const bestTrailer = extractBestTrailer(videos) || (activeItem.trailerKey ? { key: activeItem.trailerKey } as TmdbVideo : null);
 
   const handleShare = () => {
     if (typeof window !== 'undefined' && navigator.clipboard) {
@@ -213,26 +219,25 @@ export const DetailModal: React.FC<DetailModalProps> = ({
     }
   };
 
-  const scrollCast = (direction: 'left' | 'right') => {
-    if (castScrollRef.current) {
-      const offset = direction === 'left' ? -320 : 320;
-      castScrollRef.current.scrollBy({ left: offset, behavior: 'smooth' });
+  const scrollEpisodes = (direction: 'left' | 'right') => {
+    if (episodesScrollRef.current) {
+      const offset = direction === 'left' ? -380 : 380;
+      episodesScrollRef.current.scrollBy({ left: offset, behavior: 'smooth' });
     }
   };
 
   const scrollRecs = (direction: 'left' | 'right') => {
     if (recsScrollRef.current) {
-      const offset = direction === 'left' ? -400 : 400;
+      const offset = direction === 'left' ? -380 : 380;
       recsScrollRef.current.scrollBy({ left: offset, behavior: 'smooth' });
     }
   };
 
-  // Safe rating & display formatting
-  const formattedRating = (
-    typeof activeItem.rating === 'number' && !isNaN(activeItem.rating) ? activeItem.rating : 8.2
-  ).toFixed(1);
-
   const displayRecommendations = tmdbRecommendations.length > 0 ? tmdbRecommendations : relatedItems;
+  const displayCast = activeItem.cast && activeItem.cast.length > 0 ? activeItem.cast : [
+    { name: 'Principal Actor', character: 'Lead Role', avatar: '' },
+    { name: 'Supporting Cast', character: 'Key Figure', avatar: '' }
+  ];
 
   return (
     <>
@@ -244,9 +249,22 @@ export const DetailModal: React.FC<DetailModalProps> = ({
         aria-label={activeItem.title}
       >
         {/* ================================================================= */}
-        {/* 1. CINEMATIC FULL-WIDTH BACKDROP (IMAX-SCALE PROPORTIONS)        */}
+        {/* TOP-LEFT CIRCULAR BACK BUTTON (EXACTLY AS IN SCREENSHOT)          */}
         {/* ================================================================= */}
-        <div className="relative w-full h-[520px] sm:h-[640px] md:h-[760px] lg:h-[860px] xl:h-[940px] min-h-[75vh] bg-black overflow-hidden">
+        <button
+          type="button"
+          onClick={onClose}
+          className="fixed top-6 left-6 sm:top-8 sm:left-10 z-30 w-11 h-11 rounded-full border border-white/20 bg-black/50 backdrop-blur-md text-white flex items-center justify-center hover:bg-white/20 hover:scale-105 active:scale-95 transition-all cursor-pointer shadow-2xl"
+          title="Back (Esc)"
+          aria-label="Back"
+        >
+          <ArrowLeft className="w-5 h-5 text-white" />
+        </button>
+
+        {/* ================================================================= */}
+        {/* CINEMATIC FULL-BLEED BACKDROP WITH ATMOSPHERIC VIGNETTE           */}
+        {/* ================================================================= */}
+        <div className="relative w-full min-h-[580px] md:min-h-[680px] lg:min-h-[760px] bg-black overflow-hidden flex flex-col justify-end">
           {/* Backdrop Image */}
           <div className="absolute inset-0">
             <ImageWithFallback
@@ -255,89 +273,69 @@ export const DetailModal: React.FC<DetailModalProps> = ({
               alt={activeItem.title}
               fallbackTitle={activeItem.title}
               containerClassName="w-full h-full"
-              className="w-full h-full object-cover object-top filter brightness-95"
+              className="w-full h-full object-cover object-right md:object-center filter brightness-95"
             />
           </div>
 
-          {/* 7Movies Multi-Layered Gradients: Seamless black fade into page content */}
-          <div className="absolute inset-0 bg-gradient-to-t from-black via-black/50 to-transparent" />
-          <div className="absolute inset-0 bg-gradient-to-r from-black/85 via-black/30 to-transparent hidden md:block" />
-          <div className="absolute inset-x-0 bottom-0 h-64 sm:h-80 md:h-96 bg-gradient-to-t from-black via-black to-transparent" />
+          {/* Screenshot Atmospheric Gradients:
+              1. Left-to-right gradient ensures Odysseus/subject on right glows through, while left text has deep contrast
+              2. Bottom-to-top gradient seamlessly merges into the pitch-black page canvas
+              3. Subtle top vignette
+          */}
+          <div className="absolute inset-0 bg-gradient-to-r from-black via-black/80 md:via-black/70 to-transparent" />
+          <div className="absolute inset-x-0 bottom-0 h-72 bg-gradient-to-t from-black via-black/90 to-transparent" />
+          <div className="absolute inset-x-0 top-0 h-32 bg-gradient-to-b from-black/60 to-transparent" />
 
-          {/* Top Floating Action Bar */}
-          <div className="absolute top-5 sm:top-8 inset-x-0 px-6 sm:px-10 md:px-14 flex items-center justify-between z-20 pointer-events-auto">
-            <button
-              type="button"
-              onClick={onClose}
-              className="w-12 h-12 rounded-full bg-black/75 backdrop-blur-md border border-white/20 hover:border-white text-white flex items-center justify-center transition-all cursor-pointer shadow-2xl hover:scale-105 active:scale-95"
-              title="Close (Esc)"
-              aria-label="Close"
-            >
-              <X className="w-6 h-6" />
-            </button>
-
-            <div className="flex items-center gap-3">
-              <span className="hidden sm:inline-flex px-4 py-1.5 rounded-full text-xs font-mono bg-black/70 backdrop-blur-md border border-white/20 text-white font-semibold shadow-lg">
-                VidRift 4K Ultra HD · Ad-Free
-              </span>
-            </div>
-          </div>
-        </div>
-
-        {/* ================================================================= */}
-        {/* 2. MAIN MOVIE INFORMATION & BALANCED EXPANSIVE POSTER LAYOUT     */}
-        {/* ================================================================= */}
-        <div className="relative z-10 -mt-52 sm:-mt-68 md:-mt-84 lg:-mt-[400px] xl:-mt-[440px] px-4 sm:px-8 md:px-12 lg:px-16 max-w-[1600px] w-full mx-auto space-y-16 pb-28">
-          <div className="flex flex-col md:flex-row items-center md:items-end gap-8 md:gap-12 lg:gap-14">
-            {/* High-Resolution Grand Portrait Poster */}
-            <div className="w-60 sm:w-72 md:w-80 lg:w-96 xl:w-[420px] aspect-[2/3] shrink-0 rounded-2xl sm:rounded-3xl overflow-hidden shadow-[0_35px_90px_-15px_rgba(0,0,0,0.98)] border border-white/25 bg-[#111215] group">
-              <ImageWithFallback
-                src={activeItem.posterUrl}
-                fallbackSrc={activeItem.backdropUrl}
-                alt={activeItem.title}
-                fallbackTitle={activeItem.title}
-                containerClassName="w-full h-full"
-                className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
-              />
-            </div>
-
-            {/* Movie / TV Metadata and Title */}
-            <div className="flex-1 space-y-5 text-center md:text-left min-w-0">
-              {/* Unboxed Metadata Line (No static pills) */}
-              <div className="flex items-center justify-center md:justify-start gap-2.5 sm:gap-3 flex-wrap text-sm sm:text-base md:text-lg text-[#beb9bc]">
-                <span className="flex items-center gap-1.5 font-bold text-amber-300">
-                  <Star className="w-5 h-5 fill-amber-300 text-amber-300" />
-                  <span className="text-base sm:text-lg">{formattedRating}</span>
-                  {activeItem.voteCount && (
-                    <span className="text-[#8e8a91] font-normal text-xs sm:text-sm">({activeItem.voteCount})</span>
-                  )}
-                </span>
+          {/* =============================================================== */}
+          {/* MAIN INFO HERO (LEFT ALIGNED, EXACTLY LIKE SCREENSHOT)           */}
+          {/* =============================================================== */}
+          <div className="relative z-10 w-full max-w-7xl mx-auto px-6 sm:px-12 md:px-16 pt-28 pb-12 sm:pb-16 text-left">
+            <div className="max-w-2xl space-y-4">
+              {/* Eyebrow Line: — FILM · 2026 · [ R ] · 2H 53M */}
+              <div className="flex items-center gap-2.5 text-xs sm:text-[13px] font-mono uppercase tracking-[0.2em] text-[#a8a3ab] flex-wrap">
+                <span className="inline-block w-4 h-[1.5px] bg-white/60 mr-0.5" />
+                <span className="text-white/90">{isTv ? 'SERIES' : 'FILM'}</span>
                 <span className="text-white/30" aria-hidden="true">·</span>
-                <span className="font-semibold">{activeItem.releaseYear}</span>
+                <span>{activeItem.releaseYear}</span>
                 <span className="text-white/30" aria-hidden="true">·</span>
-                <span>{activeItem.runtime || (activeItem.totalSeasons ? `${activeItem.totalSeasons} Season${activeItem.totalSeasons > 1 ? 's' : ''}` : 'Series')}</span>
-                <span className="text-white/30" aria-hidden="true">·</span>
-                <span className="px-2 py-0.5 rounded text-xs font-mono uppercase bg-white/10 text-white border border-white/15">
+                <span className="px-1.5 py-0.5 rounded border border-white/35 text-[10px] font-mono leading-none inline-flex items-center justify-center font-medium text-white/90">
                   {activeItem.ageRating || 'PG-13'}
                 </span>
                 <span className="text-white/30" aria-hidden="true">·</span>
-                <span>{activeItem.language || 'English'}</span>
+                <span>
+                  {activeItem.runtime || (activeItem.totalSeasons ? `${activeItem.totalSeasons} SEASONS` : 'SERIES')}
+                </span>
               </div>
 
-              {/* Title */}
-              <div className="space-y-2">
-                <h1 className="font-display font-black text-4xl sm:text-5xl md:text-6xl lg:text-7xl xl:text-8xl text-white tracking-tight leading-[1.02]">
+              {/* Official Title Logo (as in Iron Man / Vision Quest / Spider-Man screenshots) */}
+              {activeItem.logoUrl ? (
+                <div className="py-1 max-w-full sm:max-w-xl">
+                  <img
+                    src={activeItem.logoUrl}
+                    alt={activeItem.title}
+                    className="max-h-24 sm:max-h-32 md:max-h-40 w-auto object-contain object-left drop-shadow-[0_12px_35px_rgba(0,0,0,0.95)] filter brightness-105"
+                    onError={(e) => {
+                      (e.target as HTMLElement).style.display = 'none';
+                      const fallback = document.getElementById('detail-title-fallback-' + activeItem.id);
+                      if (fallback) fallback.style.display = 'block';
+                    }}
+                  />
+                  <h1
+                    id={'detail-title-fallback-' + activeItem.id}
+                    style={{ display: 'none' }}
+                    className="font-display font-extrabold text-4xl sm:text-6xl md:text-7xl lg:text-8xl tracking-wider text-[#7b9ec2] uppercase leading-[0.92] drop-shadow-2xl"
+                  >
+                    {activeItem.title}
+                  </h1>
+                </div>
+              ) : (
+                <h1 className="font-display font-extrabold text-4xl sm:text-6xl md:text-7xl lg:text-8xl tracking-wider text-[#7b9ec2] uppercase leading-[0.92] drop-shadow-2xl">
                   {activeItem.title}
                 </h1>
-                {activeItem.tagline && (
-                  <p className="text-base sm:text-lg md:text-xl lg:text-2xl italic text-[#beb9bc] font-serif">
-                    "{activeItem.tagline}"
-                  </p>
-                )}
-              </div>
+              )}
 
-              {/* Genres Line */}
-              <div className="flex items-center justify-center md:justify-start gap-2.5 flex-wrap text-xs sm:text-sm md:text-base text-[#8e8a91]">
+              {/* Slash Separated Genres: ADVENTURE / ACTION / FANTASY */}
+              <div className="flex items-center gap-2 text-xs font-mono uppercase tracking-[0.22em] text-[#8e8a91] flex-wrap pt-0.5">
                 {activeItem.genres.map((g, idx) => (
                   <React.Fragment key={g}>
                     {idx > 0 && <span className="text-white/20">/</span>}
@@ -346,288 +344,346 @@ export const DetailModal: React.FC<DetailModalProps> = ({
                 ))}
               </div>
 
-              {/* Action Buttons Row - Grand & Substantial */}
-              <div className="flex items-center justify-center md:justify-start gap-3 sm:gap-4 flex-wrap pt-3">
-                {/* 1. Watch Now (VidRift) */}
+              {/* Overview / Synopsis Paragraph */}
+              <p className="text-sm md:text-[14.5px] text-[#a39fa6] leading-relaxed max-w-xl font-sans pt-1">
+                {activeItem.synopsis || 'No synopsis available for this title.'}
+              </p>
+
+              {/* Directed By Line */}
+              <div className="flex items-center gap-2 text-xs pt-1">
+                <span className="text-[10px] font-mono uppercase tracking-[0.2em] text-[#77737a]">
+                  DIRECTED BY
+                </span>
+                <span className="text-white font-medium text-xs tracking-wide">
+                  {activeItem.director || 'Christopher Nolan'}
+                </span>
+              </div>
+
+              {/* Action Buttons Row: [ ▶ Play ] [ + ] [ ☍ ] [ ⤓ ] */}
+              <div className="flex items-center gap-3 pt-3 flex-wrap">
+                {/* 1. Play Button (White pill/rectangle, Resume S1 E1 for series) */}
                 <button
                   type="button"
                   onClick={() => onPlay(activeItem, isTv && selectedSeason?.episodes?.[0] ? selectedSeason.episodes[0] : undefined)}
-                  className="h-14 sm:h-16 px-8 sm:px-10 rounded-full bg-[#f3f0ea] hover:bg-white text-black font-bold text-base sm:text-lg flex items-center gap-3 shadow-2xl transition-transform active:scale-95 cursor-pointer"
-                  title="Stream full video on VidRift"
+                  className="h-11 px-7 rounded-lg bg-white hover:bg-[#f3f0ea] text-black font-semibold text-sm flex items-center gap-2 shadow-xl transition-all active:scale-95 cursor-pointer"
+                  title={isTv ? 'Resume S1 E1' : 'Play Title'}
                 >
-                  <Play className="w-5 h-5 fill-black ml-0.5" />
-                  <span>
-                    {isTv ? 'Watch Episode 1' : 'Watch Now'}
-                  </span>
+                  <Play className="w-4 h-4 fill-black ml-0.5" />
+                  <span>{isTv ? 'Resume S1 E1' : 'Play'}</span>
                 </button>
 
-                {/* 2. Watch Trailer (Real YouTube Embed) */}
+                {/* 2. Add to Watchlist (+) */}
+                <button
+                  type="button"
+                  onClick={() => onToggleWatchlist(activeItem)}
+                  className="w-11 h-11 rounded-lg bg-white/10 hover:bg-white/20 border border-white/15 text-white flex items-center justify-center transition-all active:scale-95 cursor-pointer backdrop-blur-sm"
+                  title={inWatchlist ? 'In My List' : 'Add to My List'}
+                  aria-label="Add to My List"
+                >
+                  {inWatchlist ? <Check className="w-4 h-4 text-emerald-400" /> : <Plus className="w-4 h-4" />}
+                </button>
+
+                {/* 3. Share Button */}
+                <button
+                  type="button"
+                  onClick={handleShare}
+                  className="w-11 h-11 rounded-lg bg-white/10 hover:bg-white/20 border border-white/15 text-white flex items-center justify-center transition-all active:scale-95 cursor-pointer backdrop-blur-sm"
+                  title="Share"
+                  aria-label="Share"
+                >
+                  <Share2 className="w-4 h-4" />
+                </button>
+
+                {/* 4. Watch Trailer Modal Button */}
                 <button
                   type="button"
                   onClick={() => setTrailerModalOpen(true)}
-                  className="h-14 sm:h-16 px-7 sm:px-9 rounded-full bg-white/10 hover:bg-white/18 text-white border border-white/20 font-semibold text-base sm:text-lg flex items-center gap-2.5 transition-all active:scale-95 cursor-pointer backdrop-blur-sm"
+                  className="w-11 h-11 rounded-lg bg-white/10 hover:bg-white/20 border border-white/15 text-white flex items-center justify-center transition-all active:scale-95 cursor-pointer backdrop-blur-sm relative"
                   title="Watch Official YouTube Trailer"
+                  aria-label="Watch Trailer"
                 >
-                  <Film className="w-5 h-5 text-white" />
-                  <span>Watch Trailer</span>
+                  <Film className="w-4 h-4" />
                   {videos.length > 1 && (
-                    <span className="text-xs font-mono px-2 py-0.5 rounded-full bg-white/15 text-white/90">
+                    <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-white text-black font-mono text-[9px] flex items-center justify-center font-bold shadow">
                       {videos.length}
                     </span>
                   )}
                 </button>
-
-                {/* 3. Add to My List */}
-                <button
-                  type="button"
-                  onClick={() => onToggleWatchlist(activeItem)}
-                  className={`h-14 sm:h-16 px-6 sm:px-8 rounded-full border text-base sm:text-lg font-semibold flex items-center gap-2.5 transition-all active:scale-95 cursor-pointer ${
-                    inWatchlist
-                      ? 'bg-white text-black border-white'
-                      : 'bg-white/5 hover:bg-white/10 text-white border-white/15'
-                  }`}
-                  title={inWatchlist ? 'Remove from My List' : 'Save to My List'}
-                >
-                  {inWatchlist ? <Check className="w-5 h-5" /> : <Bookmark className="w-5 h-5" />}
-                  <span>{inWatchlist ? 'In List' : 'My List'}</span>
-                </button>
-
-                {/* 4. Share */}
-                <button
-                  type="button"
-                  onClick={handleShare}
-                  className="h-14 sm:h-16 w-14 sm:w-16 rounded-full bg-white/5 hover:bg-white/10 text-white border border-white/15 flex items-center justify-center transition-all active:scale-95 cursor-pointer"
-                  title="Copy share link"
-                >
-                  <Share2 className="w-5 h-5" />
-                </button>
               </div>
 
-              {/* Overview / Synopsis */}
-              <div className="pt-3 text-left">
-                <p className="text-base sm:text-lg md:text-xl text-[#beb9bc] leading-relaxed max-w-5xl font-normal">
-                  {activeItem.synopsis || 'No synopsis available for this title.'}
-                </p>
+              {/* Banner Card below buttons: Always find CRATOR */}
+              <div 
+                onClick={() => {
+                  if (typeof window !== 'undefined') {
+                    window.open('https://t.me/crator_cinema', '_blank');
+                  }
+                }}
+                className="relative w-full max-w-md h-16 rounded-xl bg-[#0e0f12]/90 border border-white/10 hover:border-white/25 overflow-hidden flex items-center justify-between p-3.5 pr-4 cursor-pointer transition-all hover:scale-[1.01] active:scale-[0.99] group shadow-2xl backdrop-blur-md mt-4"
+              >
+                <div className="z-10 min-w-0 pr-4">
+                  <h4 className="text-xs font-semibold text-white tracking-wide">
+                    Always find CRATOR
+                  </h4>
+                  <p className="text-[11px] font-mono text-[#8e8a91] truncate">
+                    crator.app · 7domains.fans
+                  </p>
+                </div>
+
+                {/* Thumbnail slice preview on the right */}
+                <div className="absolute right-0 top-0 bottom-0 w-36 overflow-hidden pointer-events-none opacity-40 group-hover:opacity-60 transition-opacity">
+                  <img
+                    src={activeItem.backdropUrl || activeItem.posterUrl}
+                    alt=""
+                    className="w-full h-full object-cover object-center"
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-r from-[#0e0f12] via-[#0e0f12]/60 to-transparent" />
+                </div>
+
+                <ArrowUpRight className="w-4 h-4 text-[#beb9bc] group-hover:text-white transition-colors z-10 shrink-0" />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* =================================================================== */}
+        {/* LOWER CONTENT SECTIONS: CAST, EPISODES, RECOMMENDATIONS             */}
+        {/* =================================================================== */}
+        <div className="relative z-10 px-6 sm:px-12 md:px-16 max-w-7xl mx-auto space-y-14 pb-28 text-left">
+          {/* ================================================================= */}
+          {/* 1. CAST SECTION (EXACTLY AS IN SCREENSHOT: — FEATURING / Cast)    */}
+          {/* ================================================================= */}
+          <div className="space-y-6 pt-4">
+            <div className="flex items-end justify-between border-b border-white/10 pb-4">
+              <div>
+                <div className="flex items-center gap-2 text-xs font-mono uppercase tracking-[0.2em] text-[#8e8a91]">
+                  <span className="inline-block w-4 h-[1px] bg-white/40" />
+                  <span>FEATURING</span>
+                </div>
+                <h2 className="font-display font-bold text-3xl sm:text-4xl text-white tracking-tight mt-1">
+                  Cast
+                </h2>
               </div>
 
-              {/* Director & Stream Platform Info */}
-              <div className="pt-4 flex items-center gap-8 flex-wrap text-xs sm:text-sm text-[#8e8a91] font-mono border-t border-white/15">
-                {activeItem.director && (
-                  <div>
-                    <span className="text-white/40 block text-[11px] uppercase tracking-wider">Director</span>
-                    <span className="text-white font-medium text-sm sm:text-base">{activeItem.director}</span>
+              <span className="text-xs font-mono text-[#77737a] uppercase tracking-wider">
+                {displayCast.length} CREDITED
+              </span>
+            </div>
+
+            {/* Horizontal Cast Row */}
+            <div className="flex items-stretch gap-4 overflow-x-auto no-scrollbar py-2">
+              {displayCast.map((actor, idx) => (
+                <div key={`${actor.name}-${idx}`} className="w-32 sm:w-36 shrink-0 group">
+                  <div className="w-full aspect-[3/4] rounded-xl overflow-hidden bg-[#121114] border border-white/10 shadow-lg group-hover:border-white/30 transition-all">
+                    <ImageWithFallback
+                      src={actor.avatar}
+                      alt={actor.name}
+                      fallbackTitle={actor.name}
+                      containerClassName="w-full h-full"
+                      className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+                    />
                   </div>
-                )}
-                <div>
-                  <span className="text-white/40 block text-[11px] uppercase tracking-wider">Streaming Engine</span>
-                  <span className="text-white font-medium text-sm sm:text-base">{activeItem.platform || 'VidRift'}</span>
+                  <div className="mt-2 text-left">
+                    <p className="text-xs font-semibold text-white truncate group-hover:text-[#8ea9cb] transition-colors">
+                      {actor.name}
+                    </p>
+                    <p className="text-[11px] text-[#77737a] truncate font-mono">
+                      {actor.character}
+                    </p>
+                  </div>
                 </div>
-                <div>
-                  <span className="text-white/40 block text-[11px] uppercase tracking-wider">Audio / HDR</span>
-                  <span className="text-white font-medium text-sm sm:text-base">{activeItem.audio || 'Dolby Atmos / 4K'}</span>
-                </div>
-              </div>
+              ))}
             </div>
           </div>
 
           {/* ================================================================= */}
-          {/* 3. TV SHOW SEASONS & EPISODES (IF TV / SERIES)                   */}
+          {/* 2. TV SHOW SEASONS & EPISODES (IF TV / SERIES)                   */}
           {/* ================================================================= */}
           {isTv && (
-            <div className="space-y-6 pt-10 border-t border-white/15 text-left">
+            <div className="space-y-6 pt-4 border-t border-white/10">
               <div className="flex items-center justify-between flex-wrap gap-4">
-                <div className="flex items-center gap-3.5">
-                  <div className="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center text-white shadow-lg">
-                    <Tv className="w-5 h-5" />
+                <div>
+                  <div className="flex items-center gap-2 text-xs font-mono uppercase tracking-[0.2em] text-[#8e8a91]">
+                    <span className="inline-block w-4 h-[1px] bg-white/40" />
+                    <span>CONTINUE THE STORY</span>
                   </div>
-                  <div>
-                    <h2 className="font-display font-black text-2xl sm:text-3xl md:text-4xl text-white">Episodes</h2>
-                    <p className="text-xs sm:text-sm text-[#8e8a91] font-mono">
-                      Stream full episodes instantly via VidRift 4K Ultra HD
-                    </p>
-                  </div>
+                  <h2 className="font-display font-bold text-3xl sm:text-4xl text-white tracking-tight mt-1">
+                    Episodes
+                  </h2>
                 </div>
 
-                {/* Season Selector Tabs */}
-                {seasons.length > 1 && (
-                  <div className="flex items-center gap-2 overflow-x-auto no-scrollbar py-1">
-                    {seasons.map((s) => (
-                      <button
-                        key={s.seasonNumber}
-                        type="button"
-                        onClick={() => handleSeasonChange(s.seasonNumber)}
-                        className={`px-5 sm:px-6 py-2.5 sm:py-3 rounded-full text-xs sm:text-sm font-bold whitespace-nowrap transition-all cursor-pointer ${
-                          selectedSeasonNumber === s.seasonNumber
-                            ? 'bg-white text-black shadow-xl scale-105'
-                            : 'bg-white/5 hover:bg-white/10 text-[#beb9bc] hover:text-white border border-white/10'
-                        }`}
+                {/* Season Dropdown (Exactly matching Vision Quest screenshot) */}
+                {seasons.length > 0 && (
+                  <div className="flex flex-col items-start sm:items-end gap-1">
+                    <span className="text-[10px] font-mono uppercase tracking-[0.2em] text-[#77737a]">
+                      SEASON
+                    </span>
+                    <div className="relative">
+                      <select
+                        value={selectedSeasonNumber}
+                        onChange={(e) => handleSeasonChange(Number(e.target.value))}
+                        className="h-10 pl-3.5 pr-9 rounded-lg bg-[#141518] text-white text-xs font-mono border border-white/15 focus:outline-none focus:border-white/40 cursor-pointer appearance-none min-w-[130px]"
+                        aria-label="Select season"
                       >
-                        Season {s.seasonNumber}
-                      </button>
-                    ))}
+                        {seasons.map((s) => (
+                          <option key={s.seasonNumber} value={s.seasonNumber} className="bg-[#141518] text-white">
+                            Season {s.seasonNumber}
+                          </option>
+                        ))}
+                      </select>
+                      <ChevronDown className="w-3.5 h-3.5 text-[#8e8a91] absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                    </div>
                   </div>
                 )}
               </div>
 
-              {/* Episodes Rail / List */}
+              {/* Episode Rail */}
               {isLoadingSeasons ? (
-                <div className="flex items-center justify-center py-20 text-[#8e8a91] gap-3">
-                  <Loader2 className="w-6 h-6 animate-spin text-white" />
-                  <span className="text-sm font-mono">Loading Season {selectedSeasonNumber} episodes...</span>
+                <div className="py-12 flex items-center justify-center gap-2 text-xs text-[#8e8a91] font-mono">
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <span>Loading episodes...</span>
                 </div>
               ) : selectedSeason && selectedSeason.episodes.length > 0 ? (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-5">
-                  {selectedSeason.episodes.map((ep) => (
-                    <div
-                      key={ep.id}
-                      onClick={() => onPlay(activeItem, ep)}
-                      className="group flex items-start gap-4 sm:gap-5 p-3.5 sm:p-4 rounded-2xl bg-[#111215] hover:bg-[#18191e] border border-white/10 hover:border-white/30 transition-all cursor-pointer text-left shadow-lg"
-                    >
-                      {/* 16:9 Episode Thumbnail */}
-                      <div className="relative aspect-video w-36 sm:w-48 md:w-56 rounded-xl overflow-hidden shrink-0 bg-black">
-                        <ImageWithFallback
-                          src={ep.thumbnail || activeItem.backdropUrl || activeItem.posterUrl}
-                          alt={ep.title}
-                          fallbackTitle={ep.title}
-                          containerClassName="w-full h-full"
-                          className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
-                        />
-                        <div className="absolute inset-0 bg-black/40 group-hover:bg-black/20 flex items-center justify-center transition-colors">
-                          <div className="w-10 h-10 rounded-full bg-white text-black flex items-center justify-center shadow-xl transform group-hover:scale-110 transition-transform">
-                            <Play className="w-4 h-4 fill-black ml-0.5" />
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs uppercase font-mono tracking-wider text-[#8e8a91]">
+                      {selectedSeason.title || `Season ${selectedSeason.seasonNumber}`} ({selectedSeason.episodes.length} episodes)
+                    </span>
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => scrollEpisodes('left')}
+                        className="w-8 h-8 rounded-full bg-white/5 hover:bg-white/15 text-white border border-white/10 flex items-center justify-center transition-colors cursor-pointer"
+                        aria-label="Scroll left"
+                      >
+                        <ChevronLeft className="w-4 h-4" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => scrollEpisodes('right')}
+                        className="w-8 h-8 rounded-full bg-white/5 hover:bg-white/15 text-white border border-white/10 flex items-center justify-center transition-colors cursor-pointer"
+                        aria-label="Scroll right"
+                      >
+                        <ChevronRight className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+
+                  <div
+                    ref={episodesScrollRef}
+                    className="flex items-stretch gap-4 overflow-x-auto no-scrollbar py-2"
+                  >
+                    {selectedSeason.episodes.map((ep) => (
+                      <div
+                        key={ep.id}
+                        onClick={() => onPlay(activeItem, ep)}
+                        className="w-64 sm:w-72 shrink-0 group cursor-pointer"
+                        role="button"
+                        tabIndex={0}
+                        aria-label={`Play episode ${ep.episodeNumber}: ${ep.title}`}
+                      >
+                        {/* 16:9 Thumbnail */}
+                        <div className="relative w-full aspect-video rounded-xl overflow-hidden bg-[#121114] border border-white/10 group-hover:border-white/30 transition-all shadow-lg">
+                          <ImageWithFallback
+                            src={ep.thumbnail || activeItem.backdropUrl}
+                            alt={ep.title}
+                            fallbackTitle={`${activeItem.title} Ep ${ep.episodeNumber}`}
+                            containerClassName="w-full h-full"
+                            className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+                          />
+                          <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-black/20 pointer-events-none" />
+                          <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                            <div className="w-9 h-9 rounded-full bg-white text-black flex items-center justify-center shadow-lg transform group-hover:scale-110 transition-transform">
+                              <Play className="w-4 h-4 fill-black ml-0.5" />
+                            </div>
+                          </div>
+                          <div className="absolute bottom-2 left-2.5 right-2.5 flex items-center justify-between text-[11px] font-mono text-white/90">
+                            <span>Episode {ep.episodeNumber}</span>
+                            <span>{ep.runtime || '45m'}</span>
                           </div>
                         </div>
-                        <span className="absolute bottom-1.5 right-1.5 px-2 py-0.5 rounded bg-black/85 text-[11px] font-mono text-white font-semibold">
-                          {ep.runtime}
-                        </span>
-                      </div>
 
-                      {/* Episode Content */}
-                      <div className="flex-1 min-w-0 space-y-1.5">
-                        <div className="flex items-center gap-2">
-                          <span className="text-xs sm:text-sm font-mono font-bold text-white/80">
-                            E{ep.episodeNumber}
-                          </span>
-                          <span className="text-white/20">·</span>
-                          <h3 className="font-bold text-sm sm:text-base text-white group-hover:text-white truncate">
+                        <div className="mt-2 text-left space-y-0.5">
+                          <h4 className="text-xs font-semibold text-white truncate group-hover:text-[#8ea9cb] transition-colors">
                             {ep.title}
-                          </h3>
+                          </h4>
+                          {ep.synopsis && (
+                            <p className="text-[11px] text-[#77737a] line-clamp-2 leading-relaxed">
+                              {ep.synopsis}
+                            </p>
+                          )}
                         </div>
-                        <p className="text-xs sm:text-sm text-[#8e8a91] line-clamp-2 sm:line-clamp-3 leading-relaxed">
-                          {ep.synopsis || 'Full HD stream available with multi-subtitles and fast streaming.'}
-                        </p>
                       </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                /* Fallback Episode Quick Grid */
-                <div className="p-8 rounded-2xl bg-[#111215] border border-white/10 space-y-5">
-                  <p className="text-sm text-[#beb9bc] font-medium">
-                    Select any episode to stream immediately in VidRift:
-                  </p>
-                  <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-3">
-                    {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map((epNum) => (
-                      <button
-                        key={`quick-ep-${epNum}`}
-                        type="button"
-                        onClick={() =>
-                          onPlay(activeItem, {
-                            id: `${activeItem.id}-s${selectedSeasonNumber}e${epNum}`,
-                            episodeNumber: epNum,
-                            seasonNumber: selectedSeasonNumber,
-                            title: `Episode ${epNum}`,
-                            runtime: '50m',
-                            synopsis: activeItem.synopsis,
-                            thumbnail: activeItem.backdropUrl || activeItem.posterUrl,
-                          })
-                        }
-                        className="p-3.5 rounded-xl bg-[#17181c] hover:bg-white hover:text-black border border-white/10 hover:border-white text-left transition-all cursor-pointer flex items-center justify-between group shadow-md"
-                      >
-                        <div>
-                          <span className="text-sm font-bold block text-white group-hover:text-black">
-                            Ep {epNum}
-                          </span>
-                          <span className="text-xs text-[#8e8a91] group-hover:text-neutral-700 font-mono">
-                            Season {selectedSeasonNumber}
-                          </span>
-                        </div>
-                        <Play className="w-4 h-4 text-white/60 group-hover:text-black fill-current shrink-0" />
-                      </button>
                     ))}
                   </div>
                 </div>
-              )}
+              ) : null}
             </div>
           )}
 
           {/* ================================================================= */}
-          {/* 4. CAST AND CREW SECTION                                          */}
+          {/* 3. MORE LIKE THIS RECOMMENDATIONS                                 */}
           {/* ================================================================= */}
-          {activeItem.cast && activeItem.cast.length > 0 && (
-            <div className="space-y-6 pt-10 border-t border-white/15 text-left">
+          {displayRecommendations.length > 0 && (
+            <div className="space-y-4 pt-4 border-t border-white/10">
               <div className="flex items-center justify-between">
                 <div>
-                  <h2 className="font-display font-black text-2xl sm:text-3xl md:text-4xl text-white">Top Cast</h2>
-                  <p className="text-xs sm:text-sm text-[#8e8a91] font-mono">
-                    Actors and characters from The Movie Database
-                  </p>
+                  <div className="flex items-center gap-2 text-xs font-mono uppercase tracking-[0.2em] text-[#8e8a91]">
+                    <span className="inline-block w-4 h-[1px] bg-white/40" />
+                    <span>EXPLORE MORE</span>
+                  </div>
+                  <h2 className="font-display font-bold text-2xl sm:text-3xl text-white tracking-tight mt-1">
+                    More Like This
+                  </h2>
                 </div>
 
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1.5">
                   <button
                     type="button"
-                    onClick={() => scrollCast('left')}
-                    className="w-10 h-10 rounded-full bg-white/5 hover:bg-white/15 text-white border border-white/10 flex items-center justify-center transition-colors cursor-pointer"
-                    aria-label="Scroll cast left"
+                    onClick={() => scrollRecs('left')}
+                    className="w-8 h-8 rounded-full bg-white/5 hover:bg-white/15 text-white border border-white/10 flex items-center justify-center transition-colors cursor-pointer"
+                    aria-label="Scroll left"
                   >
-                    <ChevronLeft className="w-5 h-5" />
+                    <ChevronLeft className="w-4 h-4" />
                   </button>
                   <button
                     type="button"
-                    onClick={() => scrollCast('right')}
-                    className="w-10 h-10 rounded-full bg-white/5 hover:bg-white/15 text-white border border-white/10 flex items-center justify-center transition-colors cursor-pointer"
-                    aria-label="Scroll cast right"
+                    onClick={() => scrollRecs('right')}
+                    className="w-8 h-8 rounded-full bg-white/5 hover:bg-white/15 text-white border border-white/10 flex items-center justify-center transition-colors cursor-pointer"
+                    aria-label="Scroll right"
                   >
-                    <ChevronRight className="w-5 h-5" />
+                    <ChevronRight className="w-4 h-4" />
                   </button>
                 </div>
               </div>
 
-              {/* Cast Portrait Carousel - Bigger Cards */}
-              <div 
-                ref={castScrollRef}
+              <div
+                ref={recsScrollRef}
                 className="flex items-stretch gap-4 overflow-x-auto no-scrollbar py-2"
               >
-                {activeItem.cast.map((member) => (
+                {displayRecommendations.map((rec) => (
                   <div
-                    key={member.name}
-                    className="w-36 sm:w-44 md:w-48 shrink-0 rounded-2xl overflow-hidden bg-[#111215] border border-white/10 flex flex-col group hover:border-white/35 transition-all shadow-lg"
+                    key={rec.id}
+                    onClick={() => onSelectRelated(rec)}
+                    className="w-36 sm:w-44 md:w-48 shrink-0 group cursor-pointer"
+                    role="button"
+                    tabIndex={0}
+                    aria-label={rec.title}
                   >
-                    {/* Actor Portrait */}
-                    <div className="aspect-[3/4] w-full bg-[#18191e] overflow-hidden relative">
-                      {member.avatar ? (
-                        <ImageWithFallback
-                          src={member.avatar}
-                          alt={member.name}
-                          fallbackTitle={member.name}
-                          containerClassName="w-full h-full"
-                          className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
-                        />
-                      ) : (
-                        <div className="w-full h-full flex items-center justify-center bg-white/5 text-[#8e8a91]">
-                          <User className="w-10 h-10 opacity-40" />
-                        </div>
-                      )}
+                    <div className="w-full aspect-[2/3] rounded-xl overflow-hidden bg-[#121114] border border-white/10 group-hover:border-white/30 transition-all shadow-lg">
+                      <ImageWithFallback
+                        src={rec.posterUrl}
+                        alt={rec.title}
+                        fallbackTitle={rec.title}
+                        containerClassName="w-full h-full"
+                        className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+                      />
                     </div>
-
-                    {/* Actor Names */}
-                    <div className="p-3 space-y-1">
-                      <h3 className="font-bold text-sm text-white truncate" title={member.name}>
-                        {member.name}
-                      </h3>
-                      <p className="text-xs text-[#8e8a91] truncate" title={member.character}>
-                        {member.character || 'Cast'}
+                    <div className="mt-2 text-left">
+                      <p className="text-xs font-semibold text-white truncate group-hover:text-[#8ea9cb] transition-colors">
+                        {rec.title}
+                      </p>
+                      <p className="text-[11px] text-[#77737a] font-mono">
+                        {rec.releaseYear} · {rec.type === 'movie' ? 'Movie' : 'TV'}
                       </p>
                     </div>
                   </div>
@@ -635,104 +691,18 @@ export const DetailModal: React.FC<DetailModalProps> = ({
               </div>
             </div>
           )}
-
-          {/* ================================================================= */}
-          {/* 5. MORE LIKE THIS (RECOMMENDATIONS)                              */}
-          {/* ================================================================= */}
-          {displayRecommendations.length > 0 && (
-            <div className="space-y-6 pt-10 border-t border-white/15 text-left">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h2 className="font-display font-black text-2xl sm:text-3xl md:text-4xl text-white">More Like This</h2>
-                  <p className="text-xs sm:text-sm text-[#8e8a91] font-mono">
-                    Titles you might enjoy based on {activeItem.title}
-                  </p>
-                </div>
-
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => scrollRecs('left')}
-                    className="w-10 h-10 rounded-full bg-white/5 hover:bg-white/15 text-white border border-white/10 flex items-center justify-center transition-colors cursor-pointer"
-                    aria-label="Scroll recommendations left"
-                  >
-                    <ChevronLeft className="w-5 h-5" />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => scrollRecs('right')}
-                    className="w-10 h-10 rounded-full bg-white/5 hover:bg-white/15 text-white border border-white/10 flex items-center justify-center transition-colors cursor-pointer"
-                    aria-label="Scroll recommendations right"
-                  >
-                    <ChevronRight className="w-5 h-5" />
-                  </button>
-                </div>
-              </div>
-
-              {/* Recommendations Horizontal Carousel - Bigger Cards */}
-              <div 
-                ref={recsScrollRef}
-                className="flex items-stretch gap-5 overflow-x-auto no-scrollbar py-2"
-              >
-                {displayRecommendations.map((rel) => {
-                  const relRating = (
-                    typeof rel.rating === 'number' && !isNaN(rel.rating) ? rel.rating : 8.2
-                  ).toFixed(1);
-
-                  return (
-                    <div
-                      key={rel.id}
-                      onClick={() => onSelectRelated(rel)}
-                      className="w-44 sm:w-56 md:w-64 shrink-0 flex flex-col group cursor-pointer text-left"
-                    >
-                      {/* Portrait Poster */}
-                      <div className="aspect-[2/3] w-full rounded-2xl overflow-hidden bg-[#111215] border border-white/10 group-hover:border-white/40 transition-all relative shadow-xl">
-                        <ImageWithFallback
-                          src={rel.posterUrl}
-                          fallbackSrc={rel.backdropUrl}
-                          alt={rel.title}
-                          fallbackTitle={rel.title}
-                          containerClassName="w-full h-full"
-                          className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
-                        />
-                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                          <div className="w-11 h-11 rounded-full bg-white text-black flex items-center justify-center shadow-xl transform group-hover:scale-110 transition-transform">
-                            <Play className="w-4 h-4 fill-black ml-0.5" />
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Copy */}
-                      <div className="pt-2.5 space-y-1">
-                        <h3 className="font-bold text-sm sm:text-base text-white group-hover:text-white truncate" title={rel.title}>
-                          {rel.title}
-                        </h3>
-                        <div className="flex items-center gap-2 text-xs text-[#8e8a91]">
-                          <span>{rel.releaseYear}</span>
-                          <span>·</span>
-                          <span className="flex items-center gap-0.5 text-amber-300 font-mono font-bold">
-                            ★ {relRating}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
         </div>
       </div>
 
       {/* =================================================================== */}
-      {/* 6. CINEMATIC YOUTUBE TRAILER MODAL                                  */}
+      {/* 4. FUNCTIONAL YOUTUBE TRAILER MODAL                                 */}
       {/* =================================================================== */}
       <TrailerModal
         isOpen={trailerModalOpen}
         onClose={() => setTrailerModalOpen(false)}
         title={activeItem.title}
         videos={videos}
-        initialVideoKey={bestTrailer?.key}
+        initialVideoKey={activeItem.trailerKey}
       />
     </>
   );

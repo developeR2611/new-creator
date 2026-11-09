@@ -195,6 +195,15 @@ export function mapTmdbToMediaItem(raw: any, defaultType?: MediaType): MediaItem
     published_at: v.published_at,
     iso_639_1: v.iso_639_1,
   }));
+  // Parse title logo from images.logos
+  let logoUrl: string | undefined = undefined;
+  if (Array.isArray(raw.images?.logos) && raw.images.logos.length > 0) {
+    const enLogo = raw.images.logos.find((l: any) => l.iso_639_1 === 'en') || raw.images.logos[0];
+    if (enLogo?.file_path) {
+      logoUrl = getTmdbImageUrl(enLogo.file_path, 'w500');
+    }
+  }
+
   const bestTrailer = extractBestTrailer(videos);
   const trailerKey = bestTrailer?.key;
 
@@ -225,7 +234,26 @@ export function mapTmdbToMediaItem(raw: any, defaultType?: MediaType): MediaItem
     cast,
     videos,
     trailerKey,
+    logoUrl,
   };
+}
+
+export async function getTmdbLogo(type: 'movie' | 'tv', id: string | number): Promise<string | undefined> {
+  try {
+    const cleanId = String(id).replace(/^tmdb-(movie|tv|series)-/i, '').replace(/^tmdb-/i, '');
+    const res = await fetch(`/api/tmdb/${type}/${cleanId}/images`);
+    if (!res.ok) return undefined;
+    const data = await res.json();
+    const logos = Array.isArray(data.logos) ? data.logos : [];
+    if (!logos.length) return undefined;
+    const enLogo = logos.find((l: any) => l.iso_639_1 === 'en') || logos[0];
+    if (enLogo?.file_path) {
+      return getTmdbImageUrl(enLogo.file_path, 'w500');
+    }
+    return undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 // 1. Check TMDB status on server

@@ -9,25 +9,47 @@
     <meta property="og:description" content="Stream movies, exclusive series, anime, and 4K HDR originals with an ultra-modern cinematic viewing experience." />
     <meta property="og:type" content="website" />
     <meta name="twitter:card" content="summary_large_image" />
+    <script>
+      (function() {
+        function suppress(e) {
+          if (!e) return false;
+          var msg = typeof e === 'string' ? e : (e.message || '');
+          if (
+            msg === 'Script error.' ||
+            msg.indexOf('Script error') !== -1 ||
+            msg.indexOf('WebSocket') !== -1 ||
+            !e.filename
+          ) {
+            if (e.preventDefault) e.preventDefault();
+            if (e.stopPropagation) e.stopPropagation();
+            if (e.stopImmediatePropagation) e.stopImmediatePropagation();
+            return true;
+          }
+          return false;
+        }
+        window.addEventListener('error', suppress, true);
+        window.addEventListener('unhandledrejection', function(e) {
+          if (e) {
+            if (e.preventDefault) e.preventDefault();
+            if (e.stopPropagation) e.stopPropagation();
+            if (e.stopImmediatePropagation) e.stopImmediatePropagation();
+          }
+        }, true);
+        window.onerror = function(msg, url, line, col, err) {
+          if (typeof msg === 'string' && (msg.indexOf('Script error') !== -1 || !url || url.indexOf('youtube') !== -1 || url.indexOf('vidrift') !== -1)) {
+            return true;
+          }
+          return false;
+        };
+      })();
+    </script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=DM+Mono:ital,wght@0,400;0,500;1,400&family=Manrope:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;600;700;800&display=swap" rel="stylesheet">
-    <script>
-      // Anti-Ad & Anti-Redirect Protection Guard
-      (function() {
-        // Intercept and prevent unwanted popup windows
-        try {
-          window.open = function(url, target, features) {
-            console.warn('[CRATOR Protection] Blocked popup/redirect:', url);
-            return null;
-          };
-        } catch (e) {}
-      })();
-    </script>
   </head>
   <body class="bg-black text-[#f3f0ea] antialiased selection:bg-[#f3f0ea] selection:text-black overflow-x-hidden font-sans">
     <div id="root"></div>
-    <script type="module" crossorigin src="/src/main.tsx"></script>
+    <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
 

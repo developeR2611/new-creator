@@ -58,26 +58,19 @@
 
 /* 7Movies Custom Components & Tokens */
 
-/* Topbar Fixed Navigation Header */
+/* Topbar Fixed Navigation Header - Always cleanly centered at top */
 .topbar {
   position: fixed;
-  top: 20px;
+  top: 16px;
   left: 0;
   right: 0;
-  z-index: 100;
+  z-index: 50;
   display: flex;
   align-items: center;
   justify-content: center;
   pointer-events: none;
   transition: transform 0.28s cubic-bezier(0.22, 1, 0.36, 1);
   will-change: transform;
-}
-
-@media (max-width: 800px) {
-  .topbar {
-    top: auto;
-    bottom: max(14px, env(safe-area-inset-bottom));
-  }
 }
 
 .desktop-nav-brand {
@@ -615,10 +608,12 @@
   display: none;
 }
 
-/* 7Movies Media Card */
+/* 7Movies Media Card - Fluid inside grids, fixed inside card-row */
 .media-card {
-  flex: 0 0 174px;
+  width: 100%;
   min-width: 0;
+  display: flex;
+  flex-direction: column;
   padding: 0;
   border: 0;
   background: transparent;
@@ -629,19 +624,28 @@
   user-select: none;
 }
 
+/* Horizontal card rails use fixed widths */
+.card-row .media-card {
+  flex: 0 0 174px;
+  width: 174px;
+}
+
 @media (max-width: 640px) {
-  .media-card {
+  .card-row .media-card {
     flex: 0 0 134px;
+    width: 134px;
   }
 }
 
-.media-card.is-wide {
+.card-row .media-card.is-wide {
   flex: 0 0 290px;
+  width: 290px;
 }
 
 @media (max-width: 640px) {
-  .media-card.is-wide {
+  .card-row .media-card.is-wide {
     flex: 0 0 240px;
+    width: 240px;
   }
 }
 

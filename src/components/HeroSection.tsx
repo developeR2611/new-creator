@@ -70,10 +70,32 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
 
       {/* Hero Content (Lower Left) */}
       <div key={`content-${currentItem.id}`} className="hero-content">
-        {/* Title */}
-        <h1 className="hero-title">
-          {currentItem.title}
-        </h1>
+        {/* Official Title Logo or Stylized Title */}
+        {currentItem.logoUrl ? (
+          <div className="mb-4 max-w-xs sm:max-w-sm md:max-w-md">
+            <img
+              src={currentItem.logoUrl}
+              alt={currentItem.title}
+              className="max-h-16 sm:max-h-20 md:max-h-28 w-auto object-contain object-left drop-shadow-[0_10px_25px_rgba(0,0,0,0.9)] filter brightness-105"
+              onError={(e) => {
+                (e.target as HTMLElement).style.display = 'none';
+                const fallback = document.getElementById('hero-title-fallback-' + currentItem.id);
+                if (fallback) fallback.style.display = 'block';
+              }}
+            />
+            <h1
+              id={'hero-title-fallback-' + currentItem.id}
+              style={{ display: 'none' }}
+              className="hero-title"
+            >
+              {currentItem.title}
+            </h1>
+          </div>
+        ) : (
+          <h1 className="hero-title">
+            {currentItem.title}
+          </h1>
+        )}
 
         {/* Clean Metadata Row (No pills) */}
         <div className="hero-meta">

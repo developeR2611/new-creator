@@ -94,7 +94,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
       brandColor: 'f3f0ea',
       showTitle: true,
       exit: true,
-      autoplay: false,
+      autoplay: true,
     });
 
     if (result.error || !result.embedUrl) {
@@ -298,9 +298,8 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
             src={embedUrl}
             title={titleToDisplay}
             className="w-full h-full border-0 bg-black"
-            allow="autoplay; fullscreen"
+            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share; fullscreen"
             allowFullScreen
-            sandbox="allow-scripts allow-same-origin allow-forms allow-presentation"
             onLoad={() => setIsLoading(false)}
           />
         )}

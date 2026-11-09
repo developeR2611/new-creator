@@ -51,8 +51,34 @@ export const YEARS_LIST = [
   'Classics'
 ];
 
+export const TMDB_OFFICIAL_LOGOS: Record<string, string> = {
+  'avatar-way-of-water': 'https://image.tmdb.org/t/p/w500/r5gjwzikHYWw6MC2Loq77ZDYCeP.png',
+  'avatar-2009': 'https://image.tmdb.org/t/p/w500/eYBa9fpSvZEYOl88ulP5fnRoCIi.png',
+  'dune-2': 'https://image.tmdb.org/t/p/w500/eYvF1LhPKuoBxOAmWjFTAK7EPWl.png',
+  'severance': 'https://image.tmdb.org/t/p/w500/zwJwLPuwx6s0vaVzWEE7EpL1mFd.png',
+  'cyberpunk-edgerunners': 'https://image.tmdb.org/t/p/w500/sNhrCQwDbvu6hGm8yKNQAh3njKf.png',
+  'shogun': 'https://image.tmdb.org/t/p/w500/zjKGNDF2Kr6RQvONfiM0t2tm92T.png',
+  'interstellar': 'https://image.tmdb.org/t/p/w500/8G6W14aWn2jCYUADgXXwepN5tgv.png',
+  'arcane': 'https://image.tmdb.org/t/p/w500/jXLNOzeEA8AoJy92dJTUUZXTMxK.png',
+  'oppenheimer': 'https://image.tmdb.org/t/p/w500/b07VisHvZb0WzUpA8VB77wfMXwg.png',
+  'frieren': 'https://image.tmdb.org/t/p/w500/yQuc8JcBxRWXfRHrNUSM47gCXOo.png',
+  'the-batman': 'https://image.tmdb.org/t/p/w500/haibnO2TycgulXD1Fj7b94L9m9E.png',
+  'the-last-of-us': 'https://image.tmdb.org/t/p/w500/msYtgZbEo8tAOJ37T50kgqulpKf.png',
+  'blade-runner-2049': 'https://image.tmdb.org/t/p/w500/gUoDt6GggEFXVzdyDTyF8ggrEm8.png',
+  'silo': 'https://image.tmdb.org/t/p/w500/yRiErExhC0E71iaSRxgr83ErsdH.svg',
+  'spider-verse': 'https://image.tmdb.org/t/p/w500/cmE0j3mQQe6xrzLryxGF9rF2KC8.png',
+  'jujutsu-kaisen': 'https://image.tmdb.org/t/p/w500/tEmqJ1k4MdjuaKaetn8wGyZGcyC.png',
+  'john-wick-4': 'https://image.tmdb.org/t/p/w500/24dIhRKjLnYRanA2Mo0ycZfObUp.png',
+  'house-of-the-dragon': 'https://image.tmdb.org/t/p/w500/sWW8VURTOT0yVLS6Jlxw6BQQUSZ.png',
+  'demon-slayer': 'https://image.tmdb.org/t/p/w500/ecghlDeabR3X3Vv8tXIOeXHQvQe.png',
+  'inception': 'https://image.tmdb.org/t/p/w500/eS5TjZsO30LTfZISyBbPiXshAKd.png',
+  'stranger-things': 'https://image.tmdb.org/t/p/w500/e9qFk5zrKZaB2IbbOI9N0W77vlh.svg',
+  'parasite': 'https://image.tmdb.org/t/p/w500/eEGZWCv0OYbMLCaNsDl1cgrvnWR.png',
+  'poor-things': 'https://image.tmdb.org/t/p/w500/jrOkl4kulRFFn39pmxs066p5vSA.png',
+  'anatomy-of-a-fall': 'https://image.tmdb.org/t/p/w500/fDgEeNkyUPBGzovS98t899SIdhN.png',
+};
 
-export const MEDIA_CATALOG: MediaItem[] = [
+const RAW_MEDIA_CATALOG: MediaItem[] = [
   {
     id: 'avatar-way-of-water',
     tmdbId: 76600,
@@ -874,6 +900,11 @@ export const MEDIA_CATALOG: MediaItem[] = [
     ]
   }
 ];
+
+export const MEDIA_CATALOG: MediaItem[] = RAW_MEDIA_CATALOG.map((item) => ({
+  ...item,
+  logoUrl: item.logoUrl || TMDB_OFFICIAL_LOGOS[item.id],
+}));
 
 export const INITIAL_CONTINUE_WATCHING: ContinueWatchingItem[] = [
   {
