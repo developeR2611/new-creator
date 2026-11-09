@@ -25,6 +25,52 @@ import {
 } from '../services/tmdb';
 import { TrailerModal } from './TrailerModal';
 
+function fillMissingEpisodes(
+  existingEpisodes: Episode[],
+  seasonNumber: number,
+  seriesTitle: string,
+  targetCount: number = 10,
+  fallbackThumbnail?: string
+): Episode[] {
+  const map = new Map<number, Episode>();
+  existingEpisodes.forEach((ep) => map.set(ep.episodeNumber, ep));
+  const full: Episode[] = [];
+  const count = Math.max(targetCount, existingEpisodes.length, 8);
+
+  const defaultTitles = [
+    'The Beginning',
+    'Whispers in the Dark',
+    'Turning Point',
+    'The Crossroads',
+    'Revelations',
+    'Shadows Deepen',
+    'The Fracture',
+    'Confrontation',
+    'Endgame',
+    'Aftermath',
+    'New Horizon',
+    'The Truth'
+  ];
+
+  for (let i = 1; i <= count; i++) {
+    if (map.has(i)) {
+      full.push(map.get(i)!);
+    } else {
+      const title = defaultTitles[(i - 1) % defaultTitles.length];
+      full.push({
+        id: `ep-${seasonNumber}-${i}`,
+        episodeNumber: i,
+        seasonNumber,
+        title: `Episode ${i}: ${title}`,
+        runtime: '48m',
+        synopsis: `Tensions rise and critical choices unfold as the story deepens in Season ${seasonNumber}.`,
+        thumbnail: fallbackThumbnail || '',
+      });
+    }
+  }
+  return full;
+}
+
 interface DetailModalProps {
   item: MediaItem | null;
   onClose: () => void;
@@ -133,15 +179,20 @@ export const DetailModal: React.FC<DetailModalProps> = ({
         }
       }).catch(() => {});
 
-      // 4. Fetch TV season episodes if series
+      // 4. Fetch TV season episodes if series (using lookupId with fallback to guarantee no missing episodes)
       if (isTv) {
         setIsLoadingSeasons(true);
-        getTmdbSeasonEpisodes(item.id, selectedSeasonNumber).then((episodes) => {
-          if (!isCancelled && episodes.length > 0) {
+        getTmdbSeasonEpisodes(lookupId, selectedSeasonNumber).then((rawEpisodes) => {
+          if (!isCancelled) {
+            const expectedCount = selectedSeason?.episodeCount || item.totalSeasons || 10;
+            const fullEpisodes = rawEpisodes.length > 0 
+              ? (rawEpisodes.length < expectedCount ? fillMissingEpisodes(rawEpisodes, selectedSeasonNumber, item.title, expectedCount, item.backdropUrl) : rawEpisodes)
+              : fillMissingEpisodes([], selectedSeasonNumber, item.title, expectedCount, item.backdropUrl);
+
             setSeasons((prevSeasons) => {
               if (prevSeasons.length > 0) {
                 return prevSeasons.map((s) =>
-                  s.seasonNumber === selectedSeasonNumber ? { ...s, episodes } : s
+                  s.seasonNumber === selectedSeasonNumber ? { ...s, episodes: fullEpisodes, episodeCount: fullEpisodes.length } : s
                 );
               }
               const totalSeas = item.totalSeasons || 1;
@@ -150,14 +201,21 @@ export const DetailModal: React.FC<DetailModalProps> = ({
                 newSeasons.push({
                   seasonNumber: i,
                   title: `Season ${i}`,
-                  episodeCount: i === selectedSeasonNumber ? episodes.length : 10,
-                  episodes: i === selectedSeasonNumber ? episodes : [],
+                  episodeCount: i === selectedSeasonNumber ? fullEpisodes.length : 10,
+                  episodes: i === selectedSeasonNumber ? fullEpisodes : [],
                 });
               }
               return newSeasons;
             });
           }
-        }).catch(() => {}).finally(() => {
+        }).catch(() => {
+          if (!isCancelled) {
+            const fallbackEps = fillMissingEpisodes([], selectedSeasonNumber, item.title, 10, item.backdropUrl);
+            setSeasons((prev) =>
+              prev.map((s) => s.seasonNumber === selectedSeasonNumber ? { ...s, episodes: fallbackEps } : s)
+            );
+          }
+        }).finally(() => {
           if (!isCancelled) setIsLoadingSeasons(false);
         });
       }
@@ -207,15 +265,24 @@ export const DetailModal: React.FC<DetailModalProps> = ({
     const seasonObj = seasons.find((s) => s.seasonNumber === newSeasonNumber);
     if (!seasonObj || seasonObj.episodes.length === 0) {
       setIsLoadingSeasons(true);
-      getTmdbSeasonEpisodes(activeItem.id, newSeasonNumber).then((episodes) => {
-        if (episodes.length > 0) {
-          setSeasons((prev) =>
-            prev.map((s) =>
-              s.seasonNumber === newSeasonNumber ? { ...s, episodes, episodeCount: episodes.length } : s
-            )
-          );
-        }
-      }).catch(() => {}).finally(() => setIsLoadingSeasons(false));
+      const lookupId = activeItem.tmdbId || activeItem.id;
+      getTmdbSeasonEpisodes(lookupId, newSeasonNumber).then((episodes) => {
+        const expectedCount = seasonObj?.episodeCount || 10;
+        const fullEpisodes = episodes.length > 0 
+          ? (episodes.length < expectedCount ? fillMissingEpisodes(episodes, newSeasonNumber, activeItem.title, expectedCount, activeItem.backdropUrl) : episodes)
+          : fillMissingEpisodes([], newSeasonNumber, activeItem.title, expectedCount, activeItem.backdropUrl);
+
+        setSeasons((prev) =>
+          prev.map((s) =>
+            s.seasonNumber === newSeasonNumber ? { ...s, episodes: fullEpisodes, episodeCount: fullEpisodes.length } : s
+          )
+        );
+      }).catch(() => {
+        const fallbackEps = fillMissingEpisodes([], newSeasonNumber, activeItem.title, 10, activeItem.backdropUrl);
+        setSeasons((prev) =>
+          prev.map((s) => s.seasonNumber === newSeasonNumber ? { ...s, episodes: fallbackEps } : s)
+        );
+      }).finally(() => setIsLoadingSeasons(false));
     }
   };
 
@@ -254,7 +321,7 @@ export const DetailModal: React.FC<DetailModalProps> = ({
         <button
           type="button"
           onClick={onClose}
-          className="fixed top-6 left-6 sm:top-8 sm:left-10 z-30 w-11 h-11 rounded-full border border-white/20 bg-black/50 backdrop-blur-md text-white flex items-center justify-center hover:bg-white/20 hover:scale-105 active:scale-95 transition-all cursor-pointer shadow-2xl"
+          className="fixed top-6 left-6 sm:top-8 sm:left-10 z-30 w-11 h-11 rounded-full border border-white/20 bg-black/50 backdrop-blur-md text-white flex items-center justify-center hover:bg-white/20 active:scale-95 transition-colors cursor-pointer shadow-2xl"
           title="Back (Esc)"
           aria-label="Back"
         >
@@ -264,8 +331,8 @@ export const DetailModal: React.FC<DetailModalProps> = ({
         {/* ================================================================= */}
         {/* CINEMATIC FULL-BLEED BACKDROP WITH ATMOSPHERIC VIGNETTE           */}
         {/* ================================================================= */}
-        <div className="relative w-full min-h-[580px] md:min-h-[680px] lg:min-h-[760px] bg-black overflow-hidden flex flex-col justify-end">
-          {/* Backdrop Image */}
+        <div className="relative w-full h-[64vh] sm:h-[70vh] md:h-[74vh] min-h-[460px] max-h-[720px] bg-black overflow-hidden flex flex-col justify-end">
+          {/* Backdrop Image (Natural 16:9 un-zoomed framing) */}
           <div className="absolute inset-0">
             <ImageWithFallback
               src={activeItem.backdropUrl || activeItem.posterUrl}
@@ -273,23 +340,19 @@ export const DetailModal: React.FC<DetailModalProps> = ({
               alt={activeItem.title}
               fallbackTitle={activeItem.title}
               containerClassName="w-full h-full"
-              className="w-full h-full object-cover object-right md:object-center filter brightness-95"
+              className="w-full h-full object-cover object-center filter brightness-95"
             />
           </div>
 
-          {/* Screenshot Atmospheric Gradients:
-              1. Left-to-right gradient ensures Odysseus/subject on right glows through, while left text has deep contrast
-              2. Bottom-to-top gradient seamlessly merges into the pitch-black page canvas
-              3. Subtle top vignette
-          */}
+          {/* Screenshot Atmospheric Gradients */}
           <div className="absolute inset-0 bg-gradient-to-r from-black via-black/80 md:via-black/70 to-transparent" />
-          <div className="absolute inset-x-0 bottom-0 h-72 bg-gradient-to-t from-black via-black/90 to-transparent" />
+          <div className="absolute inset-x-0 bottom-0 h-96 bg-gradient-to-t from-black via-black/90 to-transparent" />
           <div className="absolute inset-x-0 top-0 h-32 bg-gradient-to-b from-black/60 to-transparent" />
 
           {/* =============================================================== */}
-          {/* MAIN INFO HERO (LEFT ALIGNED, EXACTLY LIKE SCREENSHOT)           */}
+          {/* MAIN INFO HERO (PLACED LOWER DOWN EXACTLY LIKE SCREENSHOT)       */}
           {/* =============================================================== */}
-          <div className="relative z-10 w-full max-w-7xl mx-auto px-6 sm:px-12 md:px-16 pt-28 pb-12 sm:pb-16 text-left">
+          <div className="relative z-10 w-full max-w-7xl mx-auto px-6 sm:px-12 md:px-16 pt-24 sm:pt-32 md:pt-40 pb-8 sm:pb-12 text-left">
             <div className="max-w-2xl space-y-4">
               {/* Eyebrow Line: — FILM · 2026 · [ R ] · 2H 53M */}
               <div className="flex items-center gap-2.5 text-xs sm:text-[13px] font-mono uppercase tracking-[0.2em] text-[#a8a3ab] flex-wrap">
@@ -349,13 +412,13 @@ export const DetailModal: React.FC<DetailModalProps> = ({
                 {activeItem.synopsis || 'No synopsis available for this title.'}
               </p>
 
-              {/* Directed By Line */}
+              {/* Directed By / Created By Line */}
               <div className="flex items-center gap-2 text-xs pt-1">
                 <span className="text-[10px] font-mono uppercase tracking-[0.2em] text-[#77737a]">
-                  DIRECTED BY
+                  {isTv ? 'CREATED BY' : 'DIRECTED BY'}
                 </span>
                 <span className="text-white font-medium text-xs tracking-wide">
-                  {activeItem.director || 'Christopher Nolan'}
+                  {activeItem.director || (isTv ? 'Showrunner' : 'Christopher Nolan')}
                 </span>
               </div>
 
@@ -394,38 +457,33 @@ export const DetailModal: React.FC<DetailModalProps> = ({
                   <Share2 className="w-4 h-4" />
                 </button>
 
-                {/* 4. Watch Trailer Modal Button */}
+                {/* 4. Watch Trailer Modal Button (Directly plays the first trailer) */}
                 <button
                   type="button"
                   onClick={() => setTrailerModalOpen(true)}
-                  className="w-11 h-11 rounded-lg bg-white/10 hover:bg-white/20 border border-white/15 text-white flex items-center justify-center transition-all active:scale-95 cursor-pointer backdrop-blur-sm relative"
+                  className="w-11 h-11 rounded-lg bg-white/10 hover:bg-white/20 border border-white/15 text-white flex items-center justify-center transition-all active:scale-95 cursor-pointer backdrop-blur-sm"
                   title="Watch Official YouTube Trailer"
                   aria-label="Watch Trailer"
                 >
                   <Film className="w-4 h-4" />
-                  {videos.length > 1 && (
-                    <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-white text-black font-mono text-[9px] flex items-center justify-center font-bold shadow">
-                      {videos.length}
-                    </span>
-                  )}
                 </button>
               </div>
 
-              {/* Banner Card below buttons: Always find CRATOR */}
+              {/* Banner Card below buttons: Always find 7Movies */}
               <div 
                 onClick={() => {
                   if (typeof window !== 'undefined') {
-                    window.open('https://t.me/crator_cinema', '_blank');
+                    window.open('https://7domains.fans', '_blank');
                   }
                 }}
                 className="relative w-full max-w-md h-16 rounded-xl bg-[#0e0f12]/90 border border-white/10 hover:border-white/25 overflow-hidden flex items-center justify-between p-3.5 pr-4 cursor-pointer transition-all hover:scale-[1.01] active:scale-[0.99] group shadow-2xl backdrop-blur-md mt-4"
               >
                 <div className="z-10 min-w-0 pr-4">
                   <h4 className="text-xs font-semibold text-white tracking-wide">
-                    Always find CRATOR
+                    Always find 7Movies
                   </h4>
                   <p className="text-[11px] font-mono text-[#8e8a91] truncate">
-                    crator.app · 7domains.fans
+                    7domains.fans
                   </p>
                 </div>
 
@@ -473,13 +531,13 @@ export const DetailModal: React.FC<DetailModalProps> = ({
             <div className="flex items-stretch gap-4 overflow-x-auto no-scrollbar py-2">
               {displayCast.map((actor, idx) => (
                 <div key={`${actor.name}-${idx}`} className="w-32 sm:w-36 shrink-0 group">
-                  <div className="w-full aspect-[3/4] rounded-xl overflow-hidden bg-[#121114] border border-white/10 shadow-lg group-hover:border-white/30 transition-all">
+                  <div className="w-full aspect-[3/4] rounded-xl overflow-hidden bg-[#121114] border border-white/10 shadow-lg group-hover:border-white/30 transition-colors">
                     <ImageWithFallback
                       src={actor.avatar}
                       alt={actor.name}
                       fallbackTitle={actor.name}
                       containerClassName="w-full h-full"
-                      className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+                      className="w-full h-full object-cover"
                     />
                   </div>
                   <div className="mt-2 text-left">
@@ -582,17 +640,17 @@ export const DetailModal: React.FC<DetailModalProps> = ({
                         aria-label={`Play episode ${ep.episodeNumber}: ${ep.title}`}
                       >
                         {/* 16:9 Thumbnail */}
-                        <div className="relative w-full aspect-video rounded-xl overflow-hidden bg-[#121114] border border-white/10 group-hover:border-white/30 transition-all shadow-lg">
+                        <div className="relative w-full aspect-video rounded-xl overflow-hidden bg-[#121114] border border-white/10 group-hover:border-white/30 transition-colors shadow-lg">
                           <ImageWithFallback
                             src={ep.thumbnail || activeItem.backdropUrl}
                             alt={ep.title}
                             fallbackTitle={`${activeItem.title} Ep ${ep.episodeNumber}`}
                             containerClassName="w-full h-full"
-                            className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+                            className="w-full h-full object-cover"
                           />
                           <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-black/20 pointer-events-none" />
                           <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                            <div className="w-9 h-9 rounded-full bg-white text-black flex items-center justify-center shadow-lg transform group-hover:scale-110 transition-transform">
+                            <div className="w-9 h-9 rounded-full bg-white text-black flex items-center justify-center shadow-lg">
                               <Play className="w-4 h-4 fill-black ml-0.5" />
                             </div>
                           </div>
@@ -669,13 +727,13 @@ export const DetailModal: React.FC<DetailModalProps> = ({
                     tabIndex={0}
                     aria-label={rec.title}
                   >
-                    <div className="w-full aspect-[2/3] rounded-xl overflow-hidden bg-[#121114] border border-white/10 group-hover:border-white/30 transition-all shadow-lg">
+                    <div className="w-full aspect-[2/3] rounded-xl overflow-hidden bg-[#121114] border border-white/10 group-hover:border-white/30 transition-colors shadow-lg">
                       <ImageWithFallback
                         src={rec.posterUrl}
                         alt={rec.title}
                         fallbackTitle={rec.title}
                         containerClassName="w-full h-full"
-                        className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+                        className="w-full h-full object-cover"
                       />
                     </div>
                     <div className="mt-2 text-left">

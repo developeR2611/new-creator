@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
-import { X, Film, AlertCircle, Play, ChevronDown, Check } from 'lucide-react';
+import { X, Film, AlertCircle } from 'lucide-react';
 import { TmdbVideo } from '../types';
+import { extractBestTrailer } from '../services/tmdb';
 
 interface TrailerModalProps {
   isOpen: boolean;
@@ -18,17 +19,16 @@ export const TrailerModal: React.FC<TrailerModalProps> = ({
   initialVideoKey,
 }) => {
   const [selectedKey, setSelectedKey] = useState<string>('');
-  const [showSelector, setShowSelector] = useState<boolean>(false);
 
-  // Sync selected video key when modal opens or videos change
+  // Always determine and pick ONLY the first official trailer
   useEffect(() => {
     if (!isOpen) return;
 
     if (initialVideoKey) {
       setSelectedKey(initialVideoKey);
     } else if (videos && videos.length > 0) {
-      const best = videos.find((v) => v.key) || videos[0];
-      setSelectedKey(best.key);
+      const best = extractBestTrailer(videos);
+      setSelectedKey(best ? best.key : videos[0].key);
     } else {
       setSelectedKey('');
     }
@@ -60,9 +60,6 @@ export const TrailerModal: React.FC<TrailerModalProps> = ({
   const currentVideo = videos.find((v) => v.key === selectedKey) || videos[0];
   const hasValidVideo = Boolean(selectedKey);
 
-  // Filter YouTube videos for the switcher
-  const availableVideos = videos.filter((v) => v.site === 'YouTube' && v.key);
-
   return (
     <div
       className="fixed inset-0 z-[120] bg-black/95 backdrop-blur-md flex items-center justify-center p-3 sm:p-6 md:p-10 select-none animate-fadeIn"
@@ -88,7 +85,7 @@ export const TrailerModal: React.FC<TrailerModalProps> = ({
                 </h3>
                 {currentVideo && (
                   <span className="hidden sm:inline-flex text-[10px] font-mono uppercase px-2 py-0.5 rounded-full bg-white/10 text-[#beb9bc] shrink-0 border border-white/10">
-                    {currentVideo.type || 'Trailer'}
+                    Official Trailer
                   </span>
                 )}
               </div>
@@ -99,50 +96,6 @@ export const TrailerModal: React.FC<TrailerModalProps> = ({
           </div>
 
           <div className="flex items-center gap-2 shrink-0">
-            {/* Multi-Trailer Switcher Dropdown */}
-            {availableVideos.length > 1 && (
-              <div className="relative">
-                <button
-                  type="button"
-                  onClick={() => setShowSelector(!showSelector)}
-                  className="px-2.5 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-xs text-[#beb9bc] hover:text-white border border-white/10 flex items-center gap-1.5 transition-colors cursor-pointer"
-                  title="Switch trailer version"
-                >
-                  <span className="hidden md:inline">Trailers</span>
-                  <span className="font-mono text-[11px]">({availableVideos.length})</span>
-                  <ChevronDown className="w-3.5 h-3.5 text-[#8e8a91]" />
-                </button>
-
-                {showSelector && (
-                  <div className="absolute right-0 top-full mt-2 w-64 max-h-60 overflow-y-auto bg-[#141518] border border-white/15 rounded-xl shadow-2xl p-1 z-30 space-y-0.5">
-                    {availableVideos.map((v) => (
-                      <button
-                        key={v.id || v.key}
-                        type="button"
-                        onClick={() => {
-                          setSelectedKey(v.key);
-                          setShowSelector(false);
-                        }}
-                        className={`w-full text-left px-3 py-2 rounded-lg text-xs flex items-center justify-between transition-colors ${
-                          selectedKey === v.key
-                            ? 'bg-white text-black font-semibold'
-                            : 'text-[#beb9bc] hover:bg-white/10 hover:text-white'
-                        }`}
-                      >
-                        <div className="min-w-0 pr-2">
-                          <p className="truncate">{v.name}</p>
-                          <span className={`text-[10px] font-mono ${selectedKey === v.key ? 'text-black/70' : 'text-[#77737a]'}`}>
-                            {v.type}
-                          </span>
-                        </div>
-                        {selectedKey === v.key && <Check className="w-3.5 h-3.5 shrink-0" />}
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
-
             {/* Close Button */}
             <button
               type="button"
@@ -156,17 +109,16 @@ export const TrailerModal: React.FC<TrailerModalProps> = ({
           </div>
         </div>
 
-        {/* Video Player Area: 16:9 Full Responsive Embed */}
+        {/* Video Player Area: 16:9 Full Responsive Embed (No sandbox to avoid YouTube player blocks) */}
         <div className="relative w-full aspect-video bg-black flex items-center justify-center overflow-hidden">
           {hasValidVideo ? (
             <iframe
               key={selectedKey}
               src={`https://www.youtube.com/embed/${selectedKey}?autoplay=1&rel=0&modestbranding=1&playsinline=1`}
-              title={`${title} Trailer`}
+              title={`${title} Official Trailer`}
               className="w-full h-full border-0"
               allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
               allowFullScreen
-              sandbox="allow-scripts allow-same-origin allow-presentation"
             />
           ) : (
             <div className="flex flex-col items-center justify-center p-8 text-center space-y-3">

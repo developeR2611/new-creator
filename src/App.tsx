@@ -31,6 +31,7 @@ import {
   getTmdbPopular,
   getTmdbTopRated,
   getTmdbStatus, 
+  getTmdbLogo,
   TmdbStatus 
 } from './services/tmdb';
 
@@ -112,7 +113,20 @@ export default function App() {
         ]);
 
         if (trendingRes.status === 'fulfilled' && trendingRes.value.length > 0) {
-          setTmdbTrendingItems(trendingRes.value);
+          const rawTrending = trendingRes.value;
+          // Enrich top trending items with official TMDB transparent PNG logos for Hero & Top 10
+          const enrichedTop = await Promise.all(
+            rawTrending.slice(0, 8).map(async (item) => {
+              if (item.logoUrl) return item;
+              try {
+                const logo = await getTmdbLogo(item.type === 'series' ? 'tv' : 'movie', item.tmdbId || item.id);
+                return logo ? { ...item, logoUrl: logo } : item;
+              } catch {
+                return item;
+              }
+            })
+          );
+          setTmdbTrendingItems([...enrichedTop, ...rawTrending.slice(8)]);
         }
         if (popularRes.status === 'fulfilled' && popularRes.value.length > 0) {
           setTmdbPopularItems(popularRes.value);
@@ -263,33 +277,72 @@ export default function App() {
     showToast('Cleared watch history');
   };
 
-  // Curated datasets for sections
+  // Curated datasets for sections dynamically powered by TMDB live feeds
   const heroFeaturedItems = useMemo(() => {
+    if (tmdbTrendingItems.length >= 3) {
+      // Prioritize items that have a logoUrl
+      const withLogos = tmdbTrendingItems.filter((i) => Boolean(i.logoUrl));
+      if (withLogos.length >= 3) {
+        return withLogos.slice(0, 5);
+      }
+      return tmdbTrendingItems.slice(0, 5);
+    }
     const list = MEDIA_CATALOG.filter((item) => item.featuredInHero);
     return list.length > 0 ? list.slice(0, 5) : MEDIA_CATALOG.slice(0, 5);
-  }, []);
+  }, [tmdbTrendingItems]);
 
   const topTenItems = useMemo(() => {
+    if (tmdbTrendingItems.length >= 10) {
+      return tmdbTrendingItems.slice(0, 10).map((item, idx) => ({
+        ...item,
+        topTenRank: idx + 1,
+      }));
+    }
     const ranked = MEDIA_CATALOG.filter((item) => typeof item.topTenRank === 'number')
       .sort((a, b) => (a.topTenRank || 99) - (b.topTenRank || 99));
     return ranked.length > 0 ? ranked.slice(0, 10) : MEDIA_CATALOG.slice(0, 10);
-  }, []);
+  }, [tmdbTrendingItems]);
 
   const freshMovies = useMemo(() => {
+    if (tmdbPopularItems.length > 0) {
+      return tmdbPopularItems;
+    }
     return MEDIA_CATALOG.filter((item) => item.type === 'movie');
-  }, []);
+  }, [tmdbPopularItems]);
 
   const popularSeries = useMemo(() => {
+    if (tmdbTopRatedItems.length > 0) {
+      return tmdbTopRatedItems;
+    }
     return MEDIA_CATALOG.filter((item) => item.type === 'series' || item.type === 'anime');
-  }, []);
+  }, [tmdbTopRatedItems]);
+
+  const fullCatalog = useMemo(() => {
+    const combined = [...tmdbTrendingItems, ...tmdbPopularItems, ...tmdbTopRatedItems];
+    const seenIds = new Set<string>();
+    const uniqueList: MediaItem[] = [];
+    for (const item of combined) {
+      if (!seenIds.has(item.id)) {
+        seenIds.add(item.id);
+        uniqueList.push(item);
+      }
+    }
+    for (const catItem of MEDIA_CATALOG) {
+      if (!seenIds.has(catItem.id)) {
+        seenIds.add(catItem.id);
+        uniqueList.push(catItem);
+      }
+    }
+    return uniqueList;
+  }, [tmdbTrendingItems, tmdbPopularItems, tmdbTopRatedItems]);
 
   // Related items for modal
   const modalRelatedItems = useMemo(() => {
     if (!selectedMedia) return [];
-    return MEDIA_CATALOG.filter(
+    return fullCatalog.filter(
       (m) => m.id !== selectedMedia.id && (m.genres.some((g) => selectedMedia.genres.includes(g)) || m.type === selectedMedia.type)
     );
-  }, [selectedMedia]);
+  }, [selectedMedia, fullCatalog]);
 
   return (
     <div className="min-h-screen bg-black text-[#f3f0ea] flex flex-col antialiased selection:bg-white selection:text-black">
@@ -338,7 +391,7 @@ export default function App() {
             {/* Continue Watching Section */}
             <ContinueWatching
               items={continueWatchingItems}
-              mediaCatalog={MEDIA_CATALOG}
+              mediaCatalog={fullCatalog}
               onPlay={(item) => handlePlay(item)}
               onRemove={handleRemoveContinueWatching}
               onClearHistory={handleClearContinueWatching}
@@ -346,7 +399,7 @@ export default function App() {
 
             {/* New Episodes Section */}
             <NewEpisodes
-              mediaCatalog={MEDIA_CATALOG}
+              mediaCatalog={fullCatalog}
               onPlay={(item) => handlePlay(item)}
               onOpenDetails={(item) => setSelectedMedia(item)}
             />
@@ -355,7 +408,7 @@ export default function App() {
             <MediaCarousel
               eyebrow="Popular this week"
               title="Trending now"
-              items={MEDIA_CATALOG.filter((m) => m.featuredInHero || (m.topTenRank && m.topTenRank <= 8))}
+              items={tmdbTrendingItems.length > 0 ? tmdbTrendingItems : MEDIA_CATALOG.filter((m) => m.featuredInHero || (m.topTenRank && m.topTenRank <= 8))}
               onPlay={(item) => handlePlay(item)}
               onOpenDetails={(item) => setSelectedMedia(item)}
               onToggleWatchlist={toggleWatchlist}
@@ -414,7 +467,7 @@ export default function App() {
 
             {/* 7movies Discover Section Toolbar & Grid on Home */}
             <ExploreGrid
-              mediaCatalog={MEDIA_CATALOG}
+              mediaCatalog={fullCatalog}
               onPlay={(item) => handlePlay(item)}
               onOpenDetails={(item) => setSelectedMedia(item)}
               onToggleWatchlist={toggleWatchlist}
@@ -440,7 +493,7 @@ export default function App() {
 
             <ExploreGrid
               initialType="movie"
-              mediaCatalog={MEDIA_CATALOG}
+              mediaCatalog={fullCatalog}
               onPlay={(item) => handlePlay(item)}
               onOpenDetails={(item) => setSelectedMedia(item)}
               onToggleWatchlist={toggleWatchlist}
@@ -455,7 +508,7 @@ export default function App() {
         {activeTab === 'tv' && (
           <div className="pt-24 pb-20 space-y-6">
             <NewEpisodes
-              mediaCatalog={MEDIA_CATALOG}
+              mediaCatalog={fullCatalog}
               onPlay={(item) => handlePlay(item)}
               onOpenDetails={(item) => setSelectedMedia(item)}
             />
@@ -472,7 +525,7 @@ export default function App() {
 
             <ExploreGrid
               initialType="series"
-              mediaCatalog={MEDIA_CATALOG}
+              mediaCatalog={fullCatalog}
               onPlay={(item) => handlePlay(item)}
               onOpenDetails={(item) => setSelectedMedia(item)}
               onToggleWatchlist={toggleWatchlist}
@@ -487,7 +540,7 @@ export default function App() {
         {activeTab === 'discover' && (
           <div className="pt-24 pb-20">
             <ExploreGrid
-              mediaCatalog={MEDIA_CATALOG}
+              mediaCatalog={fullCatalog}
               onPlay={(item) => handlePlay(item)}
               onOpenDetails={(item) => setSelectedMedia(item)}
               onToggleWatchlist={toggleWatchlist}
@@ -503,7 +556,7 @@ export default function App() {
           <div className="pt-24 pb-20">
             <WatchlistView
               watchlistIds={watchlistIds}
-              mediaCatalog={MEDIA_CATALOG}
+              mediaCatalog={fullCatalog}
               onPlay={(item) => handlePlay(item)}
               onOpenDetails={(item) => setSelectedMedia(item)}
               onToggleWatchlist={toggleWatchlist}
@@ -525,7 +578,7 @@ export default function App() {
         {activeTab === ('search' as NavTab) && (
           <div className="pt-24 pb-20">
             <SearchView
-              mediaCatalog={MEDIA_CATALOG}
+              mediaCatalog={fullCatalog}
               onPlay={(item) => handlePlay(item)}
               onOpenDetails={(item) => setSelectedMedia(item)}
               onToggleWatchlist={toggleWatchlist}

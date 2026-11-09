@@ -189,8 +189,71 @@ app.get('/api/tmdb/search', async (req: Request, res: Response) => {
 });
 
 // 4. Movie Details (with credits, videos, recommendations, and title logos)
+const KNOWN_TMDB_IDS: Record<string, number> = {
+  // TV Shows
+  'severance': 97546,
+  'shogun': 126308,
+  'arcane': 94605,
+  'cyberpunk-edgerunners': 105248,
+  'the-last-of-us': 100088,
+  'house-of-the-dragon': 94997,
+  'stranger-things': 66732,
+  'frieren': 209867,
+  'jujutsu-kaisen': 95479,
+  'demon-slayer': 85937,
+  'silo': 125988,
+  'game-of-thrones': 1399,
+  'breaking-bad': 1396,
+  'vision-quest': 104279,
+  'daredevil-born-again': 202250,
+  'peacemaker': 110492,
+  'the-boys': 76479,
+  'invincible': 95557,
+  'reacher': 108978,
+  'fallout': 106379,
+  'the-bear': 136283,
+  'the-white-lotus': 111803,
+  'yellowstone': 73586,
+  'true-detective': 46648,
+  'succession': 76331,
+  'squid-game': 93405,
+
+  // Movies
+  'avatar-way-of-water': 76600,
+  'avatar-the-way-of-water': 76600,
+  'avatar-2009': 19995,
+  'avatar': 19995,
+  'dune-2': 693134,
+  'dune-part-two': 693134,
+  'dune': 438631,
+  'interstellar': 157336,
+  'oppenheimer': 872585,
+  'the-batman': 414906,
+  'blade-runner-2049': 335984,
+  'spider-man-across-the-spider-verse': 569094,
+  'john-wick-chapter-4': 603692,
+  'deadpool-wolverine': 533535,
+  'gladiator-2': 558449,
+};
+
+async function resolveTmdbId(type: 'movie' | 'tv', rawId: string): Promise<string> {
+  const clean = rawId.replace(/^tmdb-(movie|tv|series)-/i, '').replace(/^tmdb-/i, '').trim();
+  if (/^\d+$/.test(clean)) return clean;
+  const lookupKey = clean.toLowerCase();
+  if (KNOWN_TMDB_IDS[lookupKey]) return String(KNOWN_TMDB_IDS[lookupKey]);
+  
+  try {
+    const searchRes = await callTmdbApi(`/search/${type}`, { query: clean.replace(/-/g, ' ') });
+    if (searchRes.ok && searchRes.data?.results?.[0]?.id) {
+      return String(searchRes.data.results[0].id);
+    }
+  } catch {}
+  return clean;
+}
+
 app.get('/api/tmdb/movie/:id', async (req: Request, res: Response) => {
-  const result = await callTmdbApi(`/movie/${req.params.id}`, {
+  const targetId = await resolveTmdbId('movie', req.params.id);
+  const result = await callTmdbApi(`/movie/${targetId}`, {
     append_to_response: 'credits,videos,recommendations,images',
     include_image_language: 'en,null',
     language: 'en-US',
@@ -201,7 +264,8 @@ app.get('/api/tmdb/movie/:id', async (req: Request, res: Response) => {
 
 // 5. TV Show Details (with credits, videos, recommendations, and title logos)
 app.get('/api/tmdb/tv/:id', async (req: Request, res: Response) => {
-  const result = await callTmdbApi(`/tv/${req.params.id}`, {
+  const targetId = await resolveTmdbId('tv', req.params.id);
+  const result = await callTmdbApi(`/tv/${targetId}`, {
     append_to_response: 'credits,videos,recommendations,images',
     include_image_language: 'en,null',
     language: 'en-US',
@@ -210,9 +274,10 @@ app.get('/api/tmdb/tv/:id', async (req: Request, res: Response) => {
   res.json(result.data);
 });
 
-// 6. TV Season Episodes
+// 6. TV Season Episodes (guaranteed resolution from slug or id)
 app.get('/api/tmdb/tv/:id/season/:season_number', async (req: Request, res: Response) => {
-  const result = await callTmdbApi(`/tv/${req.params.id}/season/${req.params.season_number}`, {
+  const targetId = await resolveTmdbId('tv', req.params.id);
+  const result = await callTmdbApi(`/tv/${targetId}/season/${req.params.season_number}`, {
     language: 'en-US',
   });
   if (!result.ok) return res.status(result.status || 500).json(result);
@@ -240,8 +305,8 @@ app.get('/api/tmdb/top_rated/:type', async (req: Request, res: Response) => {
 // 9. Recommendations & Similar Titles
 app.get('/api/tmdb/:type/:id/recommendations', async (req: Request, res: Response) => {
   const mediaType = req.params.type === 'tv' || req.params.type === 'series' ? 'tv' : 'movie';
-  const cleanId = String(req.params.id).replace(/^tmdb-(movie|tv|series)-/, '');
-  const result = await callTmdbApi(`/${mediaType}/${cleanId}/recommendations`, { language: 'en-US', page: 1 });
+  const targetId = await resolveTmdbId(mediaType, req.params.id);
+  const result = await callTmdbApi(`/${mediaType}/${targetId}/recommendations`, { language: 'en-US', page: 1 });
   if (!result.ok) return res.status(result.status || 500).json(result);
   res.json(result.data);
 });
@@ -249,8 +314,8 @@ app.get('/api/tmdb/:type/:id/recommendations', async (req: Request, res: Respons
 // 10. Official Trailers & Videos
 app.get('/api/tmdb/:type/:id/videos', async (req: Request, res: Response) => {
   const mediaType = req.params.type === 'tv' || req.params.type === 'series' ? 'tv' : 'movie';
-  const cleanId = String(req.params.id).replace(/^tmdb-(movie|tv|series)-/, '');
-  const result = await callTmdbApi(`/${mediaType}/${cleanId}/videos`, { language: 'en-US' });
+  const targetId = await resolveTmdbId(mediaType, req.params.id);
+  const result = await callTmdbApi(`/${mediaType}/${targetId}/videos`, { language: 'en-US' });
   if (!result.ok) return res.status(result.status || 500).json(result);
   res.json(result.data);
 });
@@ -258,8 +323,8 @@ app.get('/api/tmdb/:type/:id/videos', async (req: Request, res: Response) => {
 // 11. Official Title Logos & Images
 app.get('/api/tmdb/:type/:id/images', async (req: Request, res: Response) => {
   const mediaType = req.params.type === 'tv' || req.params.type === 'series' ? 'tv' : 'movie';
-  const cleanId = String(req.params.id).replace(/^tmdb-(movie|tv|series)-/, '');
-  const result = await callTmdbApi(`/${mediaType}/${cleanId}/images`, { include_image_language: 'en,null' });
+  const targetId = await resolveTmdbId(mediaType, req.params.id);
+  const result = await callTmdbApi(`/${mediaType}/${targetId}/images`, { include_image_language: 'en,null' });
   if (!result.ok) return res.status(result.status || 500).json(result);
   res.json(result.data);
 });

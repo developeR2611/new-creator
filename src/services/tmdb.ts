@@ -204,8 +204,17 @@ export function mapTmdbToMediaItem(raw: any, defaultType?: MediaType): MediaItem
     }
   }
 
-  const bestTrailer = extractBestTrailer(videos);
-  const trailerKey = bestTrailer?.key;
+  let seasons: Season[] | undefined = undefined;
+  if (Array.isArray(raw.seasons) && raw.seasons.length > 0) {
+    seasons = raw.seasons
+      .filter((s: any) => s.season_number > 0)
+      .map((s: any) => ({
+        seasonNumber: s.season_number,
+        title: s.name || `Season ${s.season_number}`,
+        episodeCount: s.episode_count || 10,
+        episodes: [],
+      }));
+  }
 
   return {
     id: `tmdb-${type}-${raw.id}`,
@@ -222,7 +231,8 @@ export function mapTmdbToMediaItem(raw: any, defaultType?: MediaType): MediaItem
     voteCount,
     releaseYear,
     runtime: raw.runtime ? `${Math.floor(raw.runtime / 60)}h ${raw.runtime % 60}m` : undefined,
-    totalSeasons: raw.number_of_seasons || (type === 'series' ? 1 : undefined),
+    totalSeasons: raw.number_of_seasons || (type === 'series' ? (seasons?.length || 1) : undefined),
+    seasons,
     ageRating: raw.adult ? '18+' : 'PG-13',
     quality: '4K Ultra HD',
     audio: 'Dolby Atmos 7.1',
